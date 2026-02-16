@@ -93,7 +93,7 @@ def delete_note(note_id:int):
     if note_id not in notes_db:
        raise HTTPException(status_code=404,detail="Note not found!")
     deleted_note=notes_db.pop(note_id)
-    return{"success":"note deleted!","note":delete_note}
+    return{"success":"note deleted!","note":deleted_note}
 
 
 
