@@ -1,19 +1,47 @@
+#imports
 from fastapi import FastAPI,HTTPException
 from typing import Optional,List
 from pydantic import BaseModel,Field,field_validator
 from datetime import datetime
+from sqlalchemy import Column, Integer, String,Boolean,DateTime
+from database import Base, engine
+from database import sessionlocal
+from fastapi import Depends
+from sqlalchemy.orm import session
 
 
-
+#app
 app=FastAPI()
 
-notes_db={}
-next_id=1 
+#database model
+class NoteDB(Base):
+    __tablename__="notes"
+    id= Column(Integer,primary_key=True, index=True )
+    title=Column(String)
+    content=Column(String,nullable=False)
+    category=Column(String,nullable=True)
+    is_important=Column(Boolean,default=False)
+    created_at=Column(DateTime,default=datetime.utcnow)
+
+#create tables
+print(Base)
+print(type(Base))
+Base.metadata.create_all(bind=engine)
+
+#dependency
+def get_db():
+    db=sessionlocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 #input model 
 
 class NoteCreate(BaseModel):
     title:str=Field(...,min_length=3,max_length=100)
-    content:str=Field(...,min_length=10,max_length=100000)
+    content:str=Field(...,min_length=5,max_length=100000)
     category:Optional[str]=Field(None,max_length=50)
     is_important:bool=False
 
@@ -24,10 +52,11 @@ class NoteCreate(BaseModel):
         if not value:
             raise ValueError("Title cannot be blank")
         return value
+    
  #output model
 
 class NoteResponse(BaseModel):
-    note_id:int
+    id:int
     tile:str
     content:str
     category:Optional[str]
@@ -36,64 +65,72 @@ class NoteResponse(BaseModel):
 
     
 #get by ID
-@app.get("/notes/{note_id}",response_model=NoteResponse)
-def get_note(note_id:int):
-    if note_id not in notes_db:
-     raise HTTPException(status_code=404,detail="Note not found!")
-    return notes_db[note_id]
+@app.get("/notes/{note_id}")
+def get_note(note_id:int,db:session=Depends(get_db)):
+   note=db.query(NoteDB).filter(NoteDB.id==note_id).first()
+   if not note:
+    raise HTTPException(status_code=404,detail="Note not found!")
+   return note
 
 
 
 #get ALL
-@app.get("/notes",response_model=NoteResponse)
-def get_all_notes():
-    return list(notes_db.values())
+@app.get("/notes")
+def get_notes(db:session=Depends(get_db)):
+    notes= db.query(NoteDB).all()
+    return notes
 
 
 #CREATE
-@app.post("/notes",response_model=NoteResponse)
-def create_notes(note:NoteCreate):
-    global next_id
+@app.post("/notes")
+def create_notes(note:NoteCreate,db:session =Depends(get_db)):
 
-    new_note={
-        "note_id":next_id,
-        "title":note.title,
-        "content":note.content,
-        "category":note.category,
-        "is_important":note.is_important,
-        "Created_at":datetime.utcnow()
-    }
-    notes_db[next_id]=new_note
-    next_id +=1
+
+    new_note=NoteDB(
+        title=note.title,
+        content=note.content,
+        category=note.category,
+        is_important=note.is_important
+        )
+       
+    db.add(new_note)
+    db.commit()
+    db.refresh(new_note)
     return new_note
 
 
-   
 #UPDATE
 @app.put("/note/{note_id}")
-def update_note(note_id:int,note:NoteCreate):
-    if note_id not in notes_db:
-        raise HTTPException(status_code=404,detail="Note not Found!")
-    updated_note={
-        "note_id":note_id,
-        "title":note.title,
-        "content":note.content,
-        "category":note.category,
-        "is_important":note.is_important,
-        "created_at":notes_db[note_id]
-        ["created_at"] #keep original time
-    }
-    notes_db[note_id]=updated_note
-    return updated_note
+def update_note(note_id:int,updated_note:NoteCreate,db:session=Depends(get_db)):
+   note=db.query(NoteDB).filter(NoteDB.id==note_id).first()
+   if not note:
+       raise HTTPException(status_code=404,detail="Note not Found!")
+   
+   note.title = updated_note.title
+   note.content = updated_note.content
+   note.category = updated_note.category
+   note.is_important = updated_note.is_important
+   
+   db.commit()
+   db.refresh(note)
+   return note
+
+    
 
 #DELETE
 
 @app.delete("/note/{note_id}")
-def delete_note(note_id:int):
-    if note_id not in notes_db:
+def delete_note (note_id:int,db:session=Depends(get_db)):
+   note=db.query(NoteDB).filter(NoteDB.id==note_id).first()
+
+   if not note:
        raise HTTPException(status_code=404,detail="Note not found!")
-    deleted_note=notes_db.pop(note_id)
-    return{"success":"note deleted!","note":deleted_note}
+   
+   db.delete(note)
+   db.commit()
+   return{"message":"note deleted succesfully"}
+
+      
 
 
 
