@@ -8,7 +8,7 @@ from database import Base, engine
 from database import sessionlocal
 from fastapi import Depends
 from sqlalchemy.orm import session
-
+import bcrypt
 
 #app
 app=FastAPI()
@@ -22,6 +22,15 @@ class NoteDB(Base):
     category=Column(String,nullable=True)
     is_important=Column(Boolean,default=False)
     created_at=Column(DateTime,default=datetime.utcnow)
+
+#user database   
+class UserDB(Base):
+    __tablename__="users"
+    id=Column(Integer, primary_key=True,index=True)
+    username=Column(String,unique=True,index=True)
+    email=Column(String,unique=True,index=True)
+    password=Column(String)
+
 
 #create tables
 print(Base)
@@ -53,6 +62,13 @@ class NoteCreate(BaseModel):
             raise ValueError("Title cannot be blank")
         return value
     
+ #input model for users   
+class UserCreate(BaseModel):
+    username:str
+    email:str
+    password:str
+    
+    
  #output model
 
 class NoteResponse(BaseModel):
@@ -63,7 +79,22 @@ class NoteResponse(BaseModel):
     is_important:bool
     created_at: datetime   
 
-    
+ #output model for users
+class UserResponse(BaseModel):
+    id:int
+    email:str
+    username:str
+
+#to convert sqlalchemy object into reponsemodel
+class config:
+    from_attributes=True
+
+
+#handler function or hashed password
+def hash_pwd(password:str,rounds=12)->str:
+    pwd=bcrypt.hashpw(password.encode(),bcrypt.gensalt(rounds=rounds))
+    return pwd.decode()
+
 #get by ID
 @app.get("/notes/{note_id}")
 def get_note(note_id:int,db:session=Depends(get_db)):
@@ -97,6 +128,22 @@ def create_notes(note:NoteCreate,db:session =Depends(get_db)):
     db.commit()
     db.refresh(new_note)
     return new_note
+
+#post endpoint for users
+@app.post("/users",response_model=UserResponse)
+def create_users(user:UserCreate,db:session=Depends(get_db)):
+
+    new_user=UserDB(
+        username=user.username,
+        email=user.email,
+        password=user.password
+    )
+    db.commit()
+    db.add(new_user)
+    db.refresh(new_user)
+    return new_user
+
+
 
 
 #UPDATE
