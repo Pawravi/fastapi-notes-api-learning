@@ -68,7 +68,12 @@ class UserCreate(BaseModel):
     email:str
     password:str
     
-    
+ #user login model
+class UserLogin(BaseModel):
+    username:str
+    password:str
+
+
  #output model
 
 class NoteResponse(BaseModel):
@@ -94,6 +99,12 @@ class config:
 def hash_pwd(password:str,rounds=12)->str:
     pwd=bcrypt.hashpw(password.encode(),bcrypt.gensalt(rounds=rounds))
     return pwd.decode()
+
+#verify password
+def verify_password(plain_password:str,hashed_password:str) ->bool:
+    return bcrypt.checkpw(plain_password.encode(),hashed_password.encode())
+
+
 
 #get by ID
 @app.get("/notes/{note_id}")
@@ -136,13 +147,22 @@ def create_users(user:UserCreate,db:session=Depends(get_db)):
     new_user=UserDB(
         username=user.username,
         email=user.email,
-        password=user.password
+        password=hash_pwd(user.password)
     )
-    db.commit()
     db.add(new_user)
+    db.commit()
     db.refresh(new_user)
     return new_user
 
+#user login
+@app.post("/login")
+def login(user:UserLogin,db:session=Depends(get_db)):
+    db_user=db.query(UserDB).filter(UserDB.username==user.username).first()
+    if not db_user:
+        raise HTTPException(status_code=401,detail="invalid username or password")
+    if not verify_password(user.password,db_user.password):
+        raise HTTPException(status_code=401,detail="invalid username or password")
+    return {"message":"login successfull"}
 
 
 
