@@ -2,16 +2,21 @@
 from fastapi import FastAPI,HTTPException
 from typing import Optional,List
 from pydantic import BaseModel,Field,field_validator
-from datetime import datetime
+from datetime import datetime,timedelta,timezone
 from sqlalchemy import Column, Integer, String,Boolean,DateTime
 from database import Base, engine
 from database import sessionlocal
 from fastapi import Depends
 from sqlalchemy.orm import session
+from jose import jwt,JWTError
 import bcrypt
 
 #app
 app=FastAPI()
+#jwt configuration
+SECRET_KEY="codewithpawravi"
+ALGORITHM="HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 #database model
 class NoteDB(Base):
@@ -100,9 +105,17 @@ def hash_pwd(password:str,rounds=12)->str:
     pwd=bcrypt.hashpw(password.encode(),bcrypt.gensalt(rounds=rounds))
     return pwd.decode()
 
-#verify password
+
 def verify_password(plain_password:str,hashed_password:str) ->bool:
     return bcrypt.checkpw(plain_password.encode(),hashed_password.encode())
+
+
+def create_access_token(data:dict):
+    to_encode=data.copy()
+    expire = datetime.utcnow()+timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp":expire})
+    encoded_jwt=jwt.encode(to_encode,SECRET_KEY,algorithm=ALGORITHM)
+    return encoded_jwt
 
 
 
@@ -162,7 +175,8 @@ def login(user:UserLogin,db:session=Depends(get_db)):
         raise HTTPException(status_code=401,detail="invalid username or password")
     if not verify_password(user.password,db_user.password):
         raise HTTPException(status_code=401,detail="invalid username or password")
-    return {"message":"login successfull"}
+    access_token=create_access_token({"sub":db_user.username})
+    return {"access_token": access_token, "message": "login successful!"}
 
 
 
