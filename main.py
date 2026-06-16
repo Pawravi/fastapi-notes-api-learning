@@ -9,6 +9,7 @@ from database import sessionlocal
 from fastapi import Depends
 from sqlalchemy.orm import session
 from jose import jwt,JWTError
+from fastapi.security import OAuth2PasswordBearer
 import bcrypt
 
 #app
@@ -17,6 +18,9 @@ app=FastAPI()
 SECRET_KEY="codewithpawravi"
 ALGORITHM="HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+oauth2_scheme=OAuth2PasswordBearer(tokenUrl="login")
+
 
 #database model
 class NoteDB(Base):
@@ -27,6 +31,8 @@ class NoteDB(Base):
     category=Column(String,nullable=True)
     is_important=Column(Boolean,default=False)
     created_at=Column(DateTime,default=datetime.utcnow)
+    user_id=Column(Integer)
+
 
 #user database   
 class UserDB(Base):
@@ -117,6 +123,23 @@ def create_access_token(data:dict):
     encoded_jwt=jwt.encode(to_encode,SECRET_KEY,algorithm=ALGORITHM)
     return encoded_jwt
 
+def get_current_user(token:str=Depends(oauth2_scheme),db:session=Depends(get_db)):
+    try:
+        payload=jwt.decode(token,SECRET_KEY,algorithms=[ALGORITHM])
+        username=payload.get("sub")
+        if username is None:
+           raise HTTPException(status_code=401,detail="invalid token!")
+        db_user=(db.query(UserDB).filter(UserDB.username ==username)).first()
+        if db_user is None:
+            raise HTTPException(status_code=401,detail="user not found!")
+        
+        return db_user 
+
+    except JWTError:
+            raise HTTPException(status_code=401,detail="invalid token!")
+
+
+
 
 
 #get by ID
@@ -138,14 +161,15 @@ def get_notes(db:session=Depends(get_db)):
 
 #CREATE
 @app.post("/notes")
-def create_notes(note:NoteCreate,db:session =Depends(get_db)):
+def create_note(note:NoteCreate,current_user=Depends(get_current_user),db:session=Depends(get_db)):
 
 
     new_note=NoteDB(
         title=note.title,
         content=note.content,
         category=note.category,
-        is_important=note.is_important
+        is_important=note.is_important,
+        user_id= current_user.id
         )
        
     db.add(new_note)
@@ -211,8 +235,15 @@ def delete_note (note_id:int,db:session=Depends(get_db)):
    db.commit()
    return{"message":"note deleted succesfully"}
 
-      
 
+# protected route
+@app.get("/profile")
+def profile(current_user:UserDB=Depends(get_current_user)):
+    return {"user":current_user.id,"username":current_user.username,"email":current_user.email}
+      
+@app.get("/test_token")
+def test_token(current_user:UserDB=Depends(get_current_user)):
+    return{"username":current_user.username}
 
 
 
