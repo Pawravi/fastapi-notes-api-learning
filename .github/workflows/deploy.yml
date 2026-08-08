@@ -2,13 +2,15 @@ name: Notes API CI
 
 on:
   push:
-   branches: -main
+   branches: 
+         -main
   pull_request:
-   branches: -main
+   branches: 
+         -main
 
 jobs:
    test:
-     runs_on: ubuntu-latest
+     runs-on: ubuntu-latest
      
      steps:
         -name: checkout repository
@@ -16,7 +18,7 @@ jobs:
 
 
         -name: set up python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with: 
            python-version: "3.9.6"
 
