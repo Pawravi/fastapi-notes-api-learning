@@ -3,28 +3,27 @@ name: Notes API CI
 on:
   push:
    branches: 
-         -main
+         - main
   pull_request:
    branches: 
-         -main
+         - main
 
 jobs:
    test:
      runs-on: ubuntu-latest
      
      steps:
-        -name: checkout repository
-        uses: actions/checkout@v4
+        - name: checkout repository
+          uses: actions/checkout@v4
 
 
-        -name: set up python
-        uses: actions/setup-python@v6
-        with: 
+        - name: set up python
+          uses: actions/setup-python@v6
+          with: 
            python-version: "3.9.6"
 
-        -name: Install dependencies
-        run: pip install -r
-         requirements.txt
+        - name: Install dependencies
+          run: pip install -r requirements.txt
 
-        -name: check python files
-        run: python -m compileall
+        - name: check python files
+          run: python -m compileall
